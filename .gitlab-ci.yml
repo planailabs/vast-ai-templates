@@ -1,0 +1,49 @@
+stages:
+  - cache
+  - build
+  - deploy
+
+variables:
+  XZAR_SERVER: "https://xzar.plan.ai"
+
+# The runner image (packages.ci-image) already lists xzar.plan.ai as a
+# substituter, so pinning the devshell here is what makes the build and deploy
+# jobs pull it instead of rebuilding skopeo & co on every pipeline.
+cache-devshell:
+  stage: cache
+  tags:
+    - nix-image
+  script:
+    - nix develop --profile .ci-devshell -c true
+    - xzar --server "$XZAR_SERVER" --key "$XZAR_TOKEN" upload --pin "vast-ai-templates-devshell" --expires 30d .ci-devshell
+  rules:
+    - if: $XZAR_TOKEN
+  timeout: 1h
+
+build:
+  stage: build
+  tags:
+    - nix-image
+  parallel:
+    matrix:
+      - CUDA: [cuda12, cuda13]
+  script:
+    - nix build ".#$CUDA" -L
+    # Pin the built closure so the deploy job (and dev machines) fetch it.
+    - if [ -n "$XZAR_TOKEN" ]; then xzar --server "$XZAR_SERVER" --key "$XZAR_TOKEN" upload --pin "vast-ai-templates-$CUDA" --expires 30d ./result; fi
+  timeout: 3h
+
+deploy:
+  stage: deploy
+  tags:
+    - nix-image
+  only:
+    - trunk
+  parallel:
+    matrix:
+      - CUDA: [cuda12, cuda13]
+  script:
+    - nix develop -c bash push-image.sh "$CUDA"
+  timeout: 3h
+  environment: production
+  resource_group: production
