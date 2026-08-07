@@ -70,6 +70,7 @@
               git
               curl
               wget
+              openssl
               htop
               tmux
               rsync
