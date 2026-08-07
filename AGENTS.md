@@ -7,6 +7,9 @@ NixOS CUDA Docker images for vast.ai. See `README.md` for what the flake builds.
 - [vastai-update](.agents/skills/vastai-update/SKILL.md) — build, push, and roll
   an image out to a running vast.ai instance (the rollout needs
   `vastai recycle instance`, not `reboot`).
+- [vastai-image-verify](.agents/skills/vastai-image-verify/SKILL.md) — check a
+  rolled-out image on the instance, ending in a real GPU inference run
+  (`ollama` + `smollm2:135m` through the in-image nix daemon).
 
 ## Notes
 
