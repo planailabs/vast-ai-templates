@@ -17,7 +17,9 @@ mkdir -p "$POLICY_DIR" 2>/dev/null || POLICY_DIR="$HOME/.config/containers"
 mkdir -p "$POLICY_DIR"
 [ -f "$POLICY_DIR/policy.json" ] || echo '{"default":[{"type":"insecureAcceptAnything"}]}' > "$POLICY_DIR/policy.json"
 
-REGISTRY="${CI_REGISTRY:-git.plan.ai:5050}"
+# CI sets CI_REGISTRY; the fallback is for local pushes. plan.ai serves the
+# registry from registry.plan.ai (git.plan.ai:5050 is closed).
+REGISTRY="${CI_REGISTRY:-registry.plan.ai}"
 PROJECT="${CI_PROJECT_PATH:-plan-ai/vast-ai-templates}"
 SHA="${CI_COMMIT_SHORT_SHA:-latest}"
 
