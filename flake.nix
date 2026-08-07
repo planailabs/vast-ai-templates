@@ -62,6 +62,7 @@
             environment.systemPackages = with pkgs; [
               pkgs.${cudaAttr}.cudatoolkit
               (pkgs.python3Packages.callPackage ./nix/vastai.nix { })
+              pkgs.linuxPackages.nvidia_x11.bin # nvidia-smi, nvidia-debugdump
               git
               curl
               wget
@@ -70,6 +71,16 @@
               rsync
               python3
             ];
+
+            # Ship the full NVIDIA userspace driver and let hardware.graphics
+            # populate /run/opengl-driver (GL/GLX/EGL/Vulkan + libcuda,
+            # libnvidia-ml). Note the userspace version has to match the host's
+            # kernel module — pin pkgs.linuxPackages.nvidiaPackages.* here when
+            # the host runs a different branch than nixpkgs' default.
+            hardware.graphics = {
+              enable = true;
+              extraPackages = [ pkgs.linuxPackages.nvidia_x11 ];
+            };
 
             environment.variables.LD_LIBRARY_PATH = driverLibs;
             # ...and for services, not just login shells.
