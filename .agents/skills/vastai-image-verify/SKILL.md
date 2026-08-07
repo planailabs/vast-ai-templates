@@ -78,3 +78,27 @@ where the image expects them (`/usr/lib64`, `/usr/lib/x86_64-linux-gnu`,
 This exercise doubles as a check on the nix daemon: it only works if the store
 DB was registered at image build time (`virtualisation.dockerImage.includeNixDB`)
 and `nix.settings.sandbox = false` (no CAP_SYS_ADMIN in the container).
+
+## When a check fails: the loop
+
+Fix in `flake.nix` → build → push a fresh `-$SHA` tag → `vastai recycle
+instance` → re-verify. Repeat until layer 3 passes.
+
+```bash
+# after editing flake.nix
+git commit -am "..." && SHA=$(git rev-parse --short HEAD)
+nix build .#cuda13_0 -o ~/.cache/vastai-cuda13_0
+skopeo copy --dest-creds "mkg20001:$(glab config get token --host git.plan.ai)" \
+  docker-archive:$HOME/.cache/vastai-cuda13_0 \
+  docker://registry.plan.ai/plan-ai/vast-ai-templates/nixos-cuda:cuda13_0-$SHA
+vastai update instance $ID --image registry.plan.ai/plan-ai/vast-ai-templates/nixos-cuda:cuda13_0-$SHA
+vastai recycle instance $ID
+```
+
+One round costs ~15–20 min (build + 2 GB push + pull), so **collect every
+diagnostic in a single SSH pass** before changing anything — a round spent
+learning one fact is a round wasted. Commit each fix separately; the `-$SHA`
+tag is what ties a registry image back to the code that produced it.
+
+Do not skip the tag bump: vast.ai will not re-pull a tag it already has, so
+re-pushing the same tag makes a fix look like it did nothing.
