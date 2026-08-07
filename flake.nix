@@ -61,6 +61,7 @@
             # ── CUDA ────────────────────────────────────────────────
             environment.systemPackages = with pkgs; [
               pkgs.${cudaAttr}.cudatoolkit
+              (pkgs.python3Packages.callPackage ./nix/vastai.nix { })
               git
               curl
               wget
@@ -117,6 +118,10 @@
       // {
         # 12.x is what most frameworks (torch, jax) ship wheels against.
         default = self.packages.${system}.cuda12;
+
+        # The vast.ai CLI — shipped in every image, also usable standalone
+        # (`nix run .#vastai -- show instances`).
+        vastai = pkgs.python3Packages.callPackage ./nix/vastai.nix { };
 
         # NixOS-in-Incus image for the GitLab CI runners that build the above.
         # Must be named `image` — that's the attribute the runner infra builds.

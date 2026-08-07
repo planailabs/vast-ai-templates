@@ -34,6 +34,20 @@ point at the injection paths. Port 22 is declared on the image, so `-P` works.
 Root login is key-only — edit the key in `flake.nix` before building for
 someone else.
 
+## vastai CLI
+
+The [`vastai`](https://pypi.org/project/vastai/) CLI/SDK isn't in nixpkgs, so
+it's packaged here (`nix/vastai.nix`) and installed in every image:
+
+```bash
+nix run .#vastai -- show instances
+```
+
+`borb` is dropped from its dependencies — nixpkgs ships 3.x, upstream imports
+the 2.1 API, and only the deprecated PDF-invoice shim touches it (behind a
+`try/except ImportError`). Everything else is relaxed off upstream's exact
+pins onto nixpkgs' versions.
+
 ## CI
 
 `.gitlab-ci.yml` runs on the `nix-image` runner tag: build the matrix, then
