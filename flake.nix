@@ -49,7 +49,11 @@
         inherit system;
         modules = [
           nixos2docker.nixosModules.default
-          ({ pkgs, lib, ... }: {
+          ({ pkgs, lib, ... }:
+          let
+            cudaToolkit = pkgs.${cudaAttr}.cudatoolkit;
+            runtimeLibraryPath = "${cudaToolkit}/lib:${driverLibs}";
+          in {
             nixpkgs.config.allowUnfree = true; # cudatoolkit
 
             virtualisation.dockerImage = {
@@ -60,7 +64,7 @@
 
             # ── CUDA ────────────────────────────────────────────────
             environment.systemPackages = with pkgs; [
-              pkgs.${cudaAttr}.cudatoolkit
+              cudaToolkit
               (pkgs.python3Packages.callPackage ./nix/vastai.nix { })
               pkgs.linuxPackages.nvidia_x11.bin # nvidia-smi, nvidia-debugdump
               git
@@ -82,10 +86,13 @@
               extraPackages = [ pkgs.linuxPackages.nvidia_x11 ];
             };
 
-            environment.variables.LD_LIBRARY_PATH = driverLibs;
+            environment.variables = {
+              CUDA_PATH = "${cudaToolkit}";
+              LD_LIBRARY_PATH = runtimeLibraryPath;
+            };
             # ...and for services, not just login shells.
             virtualisation.dockerVariant.systemd.settings.Manager.DefaultEnvironment =
-              lib.mkForce "SYSTEMD_SECCOMP=0 LD_LIBRARY_PATH=${driverLibs}";
+              lib.mkForce "SYSTEMD_SECCOMP=0 CUDA_PATH=${cudaToolkit} LD_LIBRARY_PATH=${runtimeLibraryPath}";
             # nvidia-smi lands in /usr/bin, which NixOS' profile PATH drops.
             environment.extraInit = ''export PATH="$PATH:/usr/bin"'';
 

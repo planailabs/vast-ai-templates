@@ -29,7 +29,9 @@ ssh -p 2222 root@localhost
 
 No `--privileged`, no `--cap-add`. The NVIDIA container runtime injects the
 host driver (`libcuda.so`, `nvidia-smi`); `LD_LIBRARY_PATH` and `PATH` already
-point at the injection paths. Port 22 is declared on the image, so `-P` works.
+point at the injection paths. `CUDA_PATH` points at the image's matching Nix
+toolkit closure, so runtimes that compile kernels through NVRTC can find its
+headers and libraries. Port 22 is declared on the image, so `-P` works.
 
 Root login is key-only — edit the key in `flake.nix` before building for
 someone else.
