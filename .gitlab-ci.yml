@@ -26,7 +26,8 @@ build:
     - nix-image
   parallel:
     matrix:
-      - CUDA: [cuda12, cuda13]
+      # Keep in sync with cudaVersions in flake.nix.
+      - CUDA: [cuda12, cuda13, cuda12_6, cuda12_8, cuda12_9, cuda13_0, cuda13_1, cuda13_2, cuda13_3]
   script:
     # Only the system closure — pinning the packed image would store the same
     # bytes a second time. deploy repacks the tarball from this closure.
@@ -42,7 +43,8 @@ deploy:
     - trunk
   parallel:
     matrix:
-      - CUDA: [cuda12, cuda13]
+      # Keep in sync with cudaVersions in flake.nix.
+      - CUDA: [cuda12, cuda13, cuda12_6, cuda12_8, cuda12_9, cuda13_0, cuda13_1, cuda13_2, cuda13_3]
   script:
     - nix develop -c bash push-image.sh "$CUDA"
   timeout: 3h

@@ -3,8 +3,18 @@
 Full NixOS Docker images — systemd as PID 1, sshd, working nix daemon, CUDA
 toolkit — built with [nixos2docker](https://git.plan.ai/plan-ai/nixos2docker).
 
-One image per major CUDA release (`cuda12`, `cuda13`; CUDA 11 is gone from
-nixpkgs). Add a minor in `flake.nix`'s `cudaMajors` when a framework pins one.
+One image per CUDA release nixpkgs still carries:
+
+| variant | CUDA |
+|---|---|
+| `cuda12` | alias for the newest 12.x (12.9 today) |
+| `cuda13` | alias for the newest 13.x (13.2 today) |
+| `cuda12_6` `cuda12_8` `cuda12_9` | 12.6, 12.8, 12.9 |
+| `cuda13_0` `cuda13_1` `cuda13_2` `cuda13_3` | 13.0 – 13.3 |
+
+12.5 and older (and all of 11.x) were removed from nixpkgs as unmaintained
+upstream. The aliases share their closure with the minor they point at, so they
+cost one extra tarball, not an extra build.
 
 ```bash
 nix build .#cuda12        # or .#cuda13, .# for the default (cuda12)

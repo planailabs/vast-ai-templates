@@ -26,14 +26,23 @@
       # time — the image must not ship a driver of its own.
       driverLibs = "/usr/lib64:/usr/lib/x86_64-linux-gnu:/run/opengl-driver/lib";
 
-      # One image per major CUDA release. vast.ai hosts run a wide range of
-      # driver versions; pick the tag that matches what the machine reports.
-      # CUDA 11 is gone from nixpkgs (unmaintained upstream, needs unsupported
-      # compilers). Add a minor here — e.g. cuda12_4 = "cudaPackages_12_4" —
-      # when a framework pins one.
-      cudaMajors = {
-        cuda12 = "cudaPackages_12";
-        cuda13 = "cudaPackages_13";
+      # One image per CUDA release nixpkgs still carries. vast.ai hosts run a
+      # wide range of driver versions; pick the tag that matches what the
+      # machine reports, or a major alias to track the newest of a series.
+      # Everything up to 12.5 (and all of 11.x) was dropped from nixpkgs as
+      # unmaintained upstream — those attrs exist but throw on eval.
+      # Keep this list in sync with the matrix in .gitlab-ci.yml.
+      cudaVersions = {
+        cuda12 = "cudaPackages_12"; # alias, currently 12.9
+        cuda13 = "cudaPackages_13"; # alias, currently 13.2
+
+        cuda12_6 = "cudaPackages_12_6";
+        cuda12_8 = "cudaPackages_12_8";
+        cuda12_9 = "cudaPackages_12_9";
+        cuda13_0 = "cudaPackages_13_0";
+        cuda13_1 = "cudaPackages_13_1";
+        cuda13_2 = "cudaPackages_13_2";
+        cuda13_3 = "cudaPackages_13_3";
       };
 
       mkSystem = tag: cudaAttr: (nixpkgs.lib.nixosSystem {
@@ -96,7 +105,7 @@
         ];
       });
 
-      cudaSystems = lib.mapAttrs mkSystem cudaMajors;
+      cudaSystems = lib.mapAttrs mkSystem cudaVersions;
     in
     {
       packages.${system} = lib.mapAttrs (_: s: s.config.system.build.dockerImage) cudaSystems
