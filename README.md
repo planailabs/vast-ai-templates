@@ -34,3 +34,7 @@ The runner image itself comes from this flake — `nix build .#image` builds a
 NixOS-in-Incus image with `xzar.plan.ai` configured as a substituter. The
 `cache-devshell` job pins the devshell closure in xzar (needs `XZAR_TOKEN`), so
 later pipelines fetch skopeo & co instead of rebuilding them.
+
+The build job pins `.#<variant>-toplevel` — the system closure, not the packed
+tarball. The image is repacked from that closure at deploy time, so the cache
+doesn't hold every byte twice.

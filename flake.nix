@@ -36,7 +36,7 @@
         cuda13 = "cudaPackages_13";
       };
 
-      mkImage = tag: cudaAttr: (nixpkgs.lib.nixosSystem {
+      mkSystem = tag: cudaAttr: (nixpkgs.lib.nixosSystem {
         inherit system;
         modules = [
           nixos2docker.nixosModules.default
@@ -94,10 +94,18 @@
             system.stateVersion = "25.11";
           })
         ];
-      }).config.system.build.dockerImage;
+      });
+
+      cudaSystems = lib.mapAttrs mkSystem cudaMajors;
     in
     {
-      packages.${system} = lib.mapAttrs mkImage cudaMajors // {
+      packages.${system} = lib.mapAttrs (_: s: s.config.system.build.dockerImage) cudaSystems
+      # `.#cuda12-toplevel` is what CI pins in xzar: the system closure the
+      # image is packed from. Caching the tarball instead would store every
+      # byte twice, and it repacks from the closure in seconds anyway.
+      // lib.mapAttrs' (n: s: lib.nameValuePair "${n}-toplevel"
+           s.config.virtualisation.dockerVariant.system.build.toplevel) cudaSystems
+      // {
         # 12.x is what most frameworks (torch, jax) ship wheels against.
         default = self.packages.${system}.cuda12;
 
