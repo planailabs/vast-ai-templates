@@ -96,6 +96,9 @@
               lib.mkForce "SYSTEMD_SECCOMP=0 CUDA_PATH=${cudaToolkit} LD_LIBRARY_PATH=${runtimeLibraryPath}";
             # nvidia-smi lands in /usr/bin, which NixOS' profile PATH drops.
             environment.extraInit = ''export PATH="$PATH:/usr/bin"'';
+            # Build tools such as Forge provisioners download auxiliary JDKs
+            # with the conventional glibc interpreter path.
+            programs.nix-ld.enable = true;
 
             # ── SSH ─────────────────────────────────────────────────
             services.openssh = {
