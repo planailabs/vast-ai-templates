@@ -102,7 +102,8 @@
         default = self.packages.${system}.cuda12;
 
         # NixOS-in-Incus image for the GitLab CI runners that build the above.
-        ci-image = gitlab-incus-image.lib.mkImage {
+        # Must be named `image` — that's the attribute the runner infra builds.
+        image = gitlab-incus-image.lib.mkImage {
           inherit system nixpkgs;
           modules = [
             ({ pkgs, ... }: {

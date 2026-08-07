@@ -30,7 +30,7 @@ someone else.
 push each variant to the GitLab registry as
 `$CI_REGISTRY/$CI_PROJECT_PATH/nixos-cuda:<variant>`.
 
-The runner image itself comes from this flake — `nix build .#ci-image` builds a
+The runner image itself comes from this flake — `nix build .#image` builds a
 NixOS-in-Incus image with `xzar.plan.ai` configured as a substituter. The
 `cache-devshell` job pins the devshell closure in xzar (needs `XZAR_TOKEN`), so
 later pipelines fetch skopeo & co instead of rebuilding them.
