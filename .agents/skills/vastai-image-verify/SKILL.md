@@ -6,7 +6,8 @@ description: Verify a NixOS CUDA image on a live vast.ai instance — systemd, s
 # Verifying an image on a live instance
 
 Roll the image out first (see [vastai-update](../vastai-update/SKILL.md)) —
-`vastai recycle instance`, not `reboot`. Then connect:
+`vastai recycle instance`, not `reboot`. Then connect — **re-read the port every
+time**, a recycle or recreate reassigns it:
 
 ```bash
 ID=47107605
@@ -62,6 +63,18 @@ nix shell --impure nixpkgs#ollama-cuda --command bash -c '
 ```
 
 smollm2:135m is ~270 MB — small enough that a failure is the GPU, not patience.
+
+Fetching `ollama-cuda` takes several minutes, so **run it detached and poll the
+log** — an SSH session that dies takes buffered output with it:
+
+```bash
+ssh ... 'cat > /root/gputest.sh' <<'SH'
+... the nix shell block above ...
+echo "=== DONE ==="
+SH
+ssh ... 'chmod +x /root/gputest.sh; setsid nohup /root/gputest.sh > /root/gputest.log 2>&1 </dev/null &'
+ssh ... 'sed -n "/=== RUN ===/,/=== DONE ===/p" /root/gputest.log'
+```
 
 Pass criteria:
 

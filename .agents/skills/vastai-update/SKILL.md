@@ -54,8 +54,26 @@ What each command actually does — measured, not documented:
 | `update instance --template_hash_id` | reported success, container unchanged |
 | `update template <hash> --image_tag` | 400 Bad Request |
 
-`recycle` wipes the container filesystem. Anything worth keeping must live on a
-volume first.
+`recycle` wipes the container filesystem **and reassigns the host SSH port** —
+re-read `.ports."22/tcp"[0].HostPort` before connecting. Anything worth keeping
+must live on a volume first.
+
+## Picking a machine
+
+A cheap offer is worthless if you cannot reach it. Filter on direct ports, or
+you get a `running` instance whose mapped port refuses every connection and
+whose `ssh_host` is `null`:
+
+```bash
+vastai search offers --raw \
+  'cuda_max_good>=13.0 gpu_ram>=12 num_gpus=1 rentable=true disk_space>=40
+   inet_down>=200 direct_port_count>=2 verified=true' -o 'dph+'
+vastai create instance <id> --template_hash <hash> --disk 40 --ssh --direct
+```
+
+`inet_down` matters as much as price: the same 2 GB image took ~1 h to pull on a
+439 Mbps Korean host and ~2 min on a 7 Gbps Norwegian one. Creating from the
+template is what carries the private-registry credentials to the instance.
 
 Watch it land (`status_msg` shows the pull, then the new tag):
 
