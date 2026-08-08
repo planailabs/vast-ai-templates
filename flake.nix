@@ -116,6 +116,11 @@
             };
 
             networking.hostName = "vastai";
+            # Vast bind-mounts Docker's runtime-owned hostname and hosts files.
+            # setup-etc cannot replace bind mounts with NixOS symlinks and PID
+            # 1 otherwise restarts forever before sshd is reached.
+            environment.etc."hostname".enable = false;
+            environment.etc."hosts".enable = false;
             time.timeZone = "UTC";
             i18n.defaultLocale = "en_US.UTF-8";
 

@@ -25,6 +25,16 @@ nix-store --version              # nix daemon + store DB survived the image buil
 vastai --version
 ```
 
+If container logs repeat NixOS stage 2 and end with `could not create symlink
+/etc/hostname` or `/etc/hosts`, Vast bind-mounted Docker's runtime files and
+NixOS activation is restarting before sshd. Disable those two generated etc
+entries in the image; Docker already supplies their contents:
+
+```nix
+environment.etc."hostname".enable = false;
+environment.etc."hosts".enable = false;
+```
+
 `readlink -f /run/current-system` is the only trustworthy check that the new
 image is live. The API's `status_msg` lags and keeps naming the previous tag.
 
