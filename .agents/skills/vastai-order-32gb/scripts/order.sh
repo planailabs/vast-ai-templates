@@ -28,6 +28,12 @@ case "${1:-list}" in
             echo "order.sh: set VAST_MAX_DPH to an explicit total hourly price cap" >&2
             exit 2
         }
+        # No default: the label is how a rental is traced back to the work it
+        # belongs to, and a shared fallback makes every instance look alike.
+        [[ ${VAST_LABEL:-} =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{2,63}$ ]] || {
+            echo "order.sh: set VAST_LABEL to a name identifying this project (3-64 chars, [A-Za-z0-9_.-])" >&2
+            exit 2
+        }
         # Vast accepts `id=...` in the query grammar but returns an empty set
         # even for an offer it just listed. Re-fetch the constrained shortlist
         # and match locally so the hardware and price are still revalidated.
@@ -48,9 +54,9 @@ case "${1:-list}" in
             echo "order.sh: could not resolve exactly one plan-ai-base template" >&2
             exit 1
         }
-        echo "Renting offer $offer_id at \$$price/h with ${disk} GiB disk via plan-ai-base" >&2
+        echo "Renting offer $offer_id at \$$price/h with ${disk} GiB disk via plan-ai-base as '$VAST_LABEL'" >&2
         created="$(vastai create instance "$offer_id" --template_hash "$template" --disk "$disk" \
-            --direct --cancel-unavail --label "ai-wasteland-trainer")"
+            --direct --cancel-unavail --label "$VAST_LABEL")"
         contract="$(sed -n "s/.*'new_contract': \([0-9][0-9]*\).*/\1/p" <<<"$created")"
         [[ -n $contract ]] || {
             echo "order.sh: create returned no instance id" >&2
