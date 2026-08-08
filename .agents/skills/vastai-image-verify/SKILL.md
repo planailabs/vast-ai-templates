@@ -48,33 +48,54 @@ Two failures to tell apart:
 ## Layer 3 — real inference (the actual pass/fail)
 
 Everything above can look fine while CUDA still can't allocate. This is the test
-that matters: pull a model over the network, build a CUDA-enabled runtime through
-the in-image nix daemon, and run it on the GPU.
+that matters: run a real model on the GPU.
 
-```bash
-export NIXPKGS_ALLOW_UNFREE=1   # ollama-cuda is unfree
-nix shell --impure nixpkgs#ollama-cuda --command bash -c '
-  ollama serve > /tmp/ollama.log 2>&1 &
-  until curl -sf http://127.0.0.1:11434/ >/dev/null; do sleep 1; done
-  ollama run smollm2:135m "Reply with exactly: ok"
-  ollama ps
-  grep -iE "inference compute|library=cuda|no compatible GPUs" /tmp/ollama.log
-'
-```
+**Use the GitHub release artifact, not `nixpkgs#ollama-cuda`.** `ollama-cuda` is
+unfree, so nothing caches it — every instance compiles ollama *and* the CUDA
+packages from source, which takes tens of minutes and has been killed outright
+mid-`nvcc` on vast hosts (`nvcc: Terminated`, `interrupted by the user`) with 19
+CPUs and a 181 GB cap free. The vendor tarball runs in seconds and also
+exercises `programs.nix-ld`, which is how most people will run vendor binaries
+in this image anyway.
 
-smollm2:135m is ~270 MB — small enough that a failure is the GPU, not patience.
+Two upstream gotchas, both of which cost a round when wrong: the asset is
+`ollama-linux-amd64.tar.zst` (**zstd**, not `.tgz`), and the old
+`ollama.com/download/...` URL 404s — fetch from
+`github.com/ollama/ollama/releases/latest`.
 
-Fetching `ollama-cuda` takes several minutes, so **run it detached and poll the
-log** — an SSH session that dies takes buffered output with it:
+Run it detached and poll the log; an SSH session that dies takes buffered output
+with it:
 
 ```bash
 ssh ... 'cat > /root/gputest.sh' <<'SH'
-... the nix shell block above ...
+#!/usr/bin/env bash
+set -x
+export NIX_LD_LIBRARY_PATH="/run/current-system/sw/share/nix-ld/lib:/usr/lib/x86_64-linux-gnu:/usr/lib64:/run/opengl-driver/lib"
+rm -rf /opt/ollama; mkdir -p /opt/ollama && cd /opt/ollama
+curl -fsSL https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst -o o.tar.zst || exit 1
+nix shell nixpkgs#zstd --command tar --use-compress-program=unzstd -xf o.tar.zst || exit 1
+export PATH=/opt/ollama/bin:$PATH OLLAMA_HOST=127.0.0.1:11434
+ollama --version
+ollama serve > /tmp/ollama.log 2>&1 &
+for i in $(seq 1 90); do curl -sf http://127.0.0.1:11434/ >/dev/null && break; sleep 2; done
+echo "=== RUN ==="; ollama run smollm2:135m "Reply with exactly: ok" 2>/dev/null | tr -d '\r'
+echo "=== PS ==="; ollama ps
+echo "=== LOG ==="; grep -aiE "inference compute|library=cuda|no compatible GPUs" /tmp/ollama.log | tail -4
 echo "=== DONE ==="
 SH
-ssh ... 'chmod +x /root/gputest.sh; setsid nohup /root/gputest.sh > /root/gputest.log 2>&1 </dev/null &'
+ssh ... 'chmod +x /root/gputest.sh && setsid nohup /root/gputest.sh > /root/gputest.log 2>&1 </dev/null &'
 ssh ... 'sed -n "/=== RUN ===/,/=== DONE ===/p" /root/gputest.log'
 ```
+
+Poll for `curl:` and `command not found` too — a dead download otherwise looks
+exactly like a slow GPU test. `pkill -f gputest` in the same SSH command kills
+the shell running it (the pattern matches its own command line); keep them apart.
+
+smollm2:135m is ~270 MB — small enough that a failure is the GPU, not patience.
+
+If you do want the nixpkgs route (`NIXPKGS_ALLOW_UNFREE=1 nix shell --impure
+nixpkgs#ollama-cuda`), build it once and pin it in xzar so instances substitute
+it instead of compiling.
 
 Pass criteria:
 
