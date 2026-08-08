@@ -1,0 +1,4 @@
+interface:
+  display_name: "Order Vast.ai 32 GB GPU"
+  short_description: "Safely rent a 32 GB Vast.ai GPU"
+  default_prompt: "Use $vastai-order-32gb to shortlist and order a verified Vast.ai machine with at least 32 GB VRAM."
