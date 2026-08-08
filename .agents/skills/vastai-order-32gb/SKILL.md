@@ -26,6 +26,8 @@ scripts/order.sh create <offer-id>
 The create command re-fetches that exact offer, refuses it if any constraint
 drifted or its total hourly price exceeds `VAST_MAX_DPH`, resolves the current
 user's exact `plan-ai-base` template, and creates an on-demand direct instance.
+The instance is labeled `ai-wasteland-trainer`, so active training rentals are
+immediately distinguishable in `vastai show instances`.
 It deliberately preserves the template's `args` runtime: passing Vast's `--ssh`
 flag replaces PID 1 with Vast's SSH wrapper, which makes this NixOS systemd
 image restart forever immediately after `starting systemd`. Port 22 is already
