@@ -28,7 +28,10 @@ case "${1:-list}" in
             echo "order.sh: set VAST_MAX_DPH to an explicit total hourly price cap" >&2
             exit 2
         }
-        offer="$(vastai search offers --raw "id=$offer_id $query" -o dph --limit 1 --storage "$disk")"
+        # Vast accepts `id=...` in the query grammar but returns an empty set
+        # even for an offer it just listed. Re-fetch the constrained shortlist
+        # and match locally so the hardware and price are still revalidated.
+        offer="$(offers | jq --argjson id "$offer_id" '[.[] | select(.id == $id)]')"
         [[ $(jq 'length' <<<"$offer") -eq 1 ]] || {
             echo "order.sh: offer $offer_id no longer satisfies the 32 GB constraints" >&2
             exit 1
