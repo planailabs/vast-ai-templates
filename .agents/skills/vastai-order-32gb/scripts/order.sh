@@ -50,7 +50,7 @@ case "${1:-list}" in
         }
         echo "Renting offer $offer_id at \$$price/h with ${disk} GiB disk via plan-ai-base" >&2
         created="$(vastai create instance "$offer_id" --template_hash "$template" --disk "$disk" \
-            --ssh --direct --cancel-unavail --label "plan-ai-32gb")"
+            --direct --cancel-unavail --label "plan-ai-32gb")"
         contract="$(sed -n "s/.*'new_contract': \([0-9][0-9]*\).*/\1/p" <<<"$created")"
         [[ -n $contract ]] || {
             echo "order.sh: create returned no instance id" >&2

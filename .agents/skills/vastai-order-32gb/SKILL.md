@@ -25,9 +25,12 @@ scripts/order.sh create <offer-id>
 
 The create command re-fetches that exact offer, refuses it if any constraint
 drifted or its total hourly price exceeds `VAST_MAX_DPH`, resolves the current
-user's exact `plan-ai-base` template, and creates an on-demand direct-SSH
-instance. Override `VAST_DISK_GB` only when the workload needs more or less than
-the 80 GiB default.
+user's exact `plan-ai-base` template, and creates an on-demand direct instance.
+It deliberately preserves the template's `args` runtime: passing Vast's `--ssh`
+flag replaces PID 1 with Vast's SSH wrapper, which makes this NixOS systemd
+image restart forever immediately after `starting systemd`. Port 22 is already
+declared by the template. Override `VAST_DISK_GB` only when the workload needs
+more or less than the 80 GiB default.
 
 Do not revalidate with a server-side `id=<offer-id>` search. Vast CLI 1.5.2
 accepts that filter but returns an empty set for a freshly listed offer. Re-run
