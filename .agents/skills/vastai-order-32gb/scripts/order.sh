@@ -49,8 +49,16 @@ case "${1:-list}" in
             exit 1
         }
         echo "Renting offer $offer_id at \$$price/h with ${disk} GiB disk via plan-ai-base" >&2
-        vastai create instance "$offer_id" --template_hash "$template" --disk "$disk" \
-            --ssh --direct --cancel-unavail --label "plan-ai-32gb"
+        created="$(vastai create instance "$offer_id" --template_hash "$template" --disk "$disk" \
+            --ssh --direct --cancel-unavail --label "plan-ai-32gb")"
+        contract="$(sed -n "s/.*'new_contract': \([0-9][0-9]*\).*/\1/p" <<<"$created")"
+        [[ -n $contract ]] || {
+            echo "order.sh: create returned no instance id" >&2
+            exit 1
+        }
+        # The CLI response also contains an instance-scoped API key. Never
+        # print it into an agent transcript or shell log.
+        printf '{"success":true,"new_contract":%s}\n' "$contract"
         ;;
     *)
         echo "usage: order.sh [list | create OFFER_ID]" >&2

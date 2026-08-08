@@ -33,6 +33,10 @@ Do not revalidate with a server-side `id=<offer-id>` search. Vast CLI 1.5.2
 accepts that filter but returns an empty set for a freshly listed offer. Re-run
 the constrained shortlist and match `.id` locally, as `scripts/order.sh` does.
 
+Capture and redact the create response. Vast CLI 1.5.2 prints an
+instance-scoped API key alongside `new_contract`; only the instance id belongs
+in logs or agent transcripts. `scripts/order.sh` emits a sanitized response.
+
 Record the returned instance id immediately. Poll `vastai show instance <id>
 --raw` until it is running, then re-read the mapped SSH port. Verify the actual
 GPU and VRAM with `nvidia-smi`; an API offer is not proof that the container can
