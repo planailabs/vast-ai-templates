@@ -21,12 +21,14 @@ Rent only after the user explicitly asks to provision or run work on Vast.ai:
 ```bash
 export VAST_MAX_DPH=0.75
 export VAST_LABEL=<project-specific-name>
-scripts/order.sh create <offer-id>
+export VAST_GPU_NAME="RTX 5090" # optional exact filter
+scripts/order.sh create
 ```
 
-The create command re-fetches that exact offer, refuses it if any constraint
-drifted or its total hourly price exceeds `VAST_MAX_DPH`, resolves the current
-user's exact `plan-ai-base` template, and creates an on-demand direct instance.
+The create command selects a current offer, refuses it if its total hourly
+price exceeds `VAST_MAX_DPH`, resolves the current user's exact `plan-ai-base`
+template, and creates an on-demand direct instance. Without `VAST_GPU_NAME` it
+selects the cheapest qualifying offer.
 
 `VAST_LABEL` is required and has no default: pick a name that identifies the
 project the machine is being rented for (3–64 chars of `[A-Za-z0-9_.-]`), so
@@ -39,9 +41,9 @@ image restart forever immediately after `starting systemd`. Port 22 is already
 declared by the template. Override `VAST_DISK_GB` only when the workload needs
 more or less than the 80 GiB default.
 
-Do not revalidate with a server-side `id=<offer-id>` search. Vast CLI 1.5.2
-accepts that filter but returns an empty set for a freshly listed offer. Re-run
-the constrained shortlist and match `.id` locally, as `scripts/order.sh` does.
+Vast regenerates offer and machine ids between searches. `create` therefore
+selects and consumes a current offer in one invocation instead of accepting an
+id printed by an earlier `list` call.
 
 Capture and redact the create response. Vast CLI 1.5.2 prints an
 instance-scoped API key alongside `new_contract`; only the instance id belongs
