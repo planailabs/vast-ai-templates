@@ -45,28 +45,42 @@
         cuda13_3 = "cudaPackages_13_3";
       };
 
+      # `cudaAttr = null` builds the Vulkan-only variant: same driver stack,
+      # no CUDA toolkit.  Vulkan and CUDA are two APIs onto the same NVIDIA
+      # driver, so every CUDA image below speaks Vulkan too — the separate
+      # `vulkan` tag exists to skip the ~4 GB toolkit closure, and to run on
+      # AMD/Intel hosts where CUDA is not an option at all.
       mkSystem = tag: cudaAttr: (nixpkgs.lib.nixosSystem {
         inherit system;
         modules = [
           nixos2docker.nixosModules.default
           ({ pkgs, lib, ... }:
           let
-            cudaToolkit = pkgs.${cudaAttr}.cudatoolkit;
-            runtimeLibraryPath = "${cudaToolkit}/lib:${driverLibs}";
+            cudaToolkit = if cudaAttr == null then null else pkgs.${cudaAttr}.cudatoolkit;
+            withCuda = cudaToolkit != null;
+            runtimeLibraryPath =
+              lib.concatStringsSep ":" (lib.optional withCuda "${cudaToolkit}/lib" ++ [ driverLibs ]);
           in {
-            nixpkgs.config.allowUnfree = true; # cudatoolkit
+            nixpkgs.config.allowUnfree = true; # cudatoolkit, nvidia_x11
 
             virtualisation.dockerImage = {
               name = "vastai-nixos-cuda";
               inherit tag;
               includeNixDB = true; # working nix / nix-daemon inside the image
+              # Read by the NVIDIA container runtime hook *before* the container
+              # starts.  Its default is compute,utility, which injects libcuda
+              # and nvidia-smi but none of the GL/Vulkan libraries — and the
+              # image's own copy of those is useless, because it has to match
+              # the host's kernel module exactly.
+              extraEnv.NVIDIA_DRIVER_CAPABILITIES = "all";
             };
 
-            # ── CUDA ────────────────────────────────────────────────
+            # ── GPU ─────────────────────────────────────────────────
             environment.systemPackages = with pkgs; [
-              cudaToolkit
               (pkgs.python3Packages.callPackage ./nix/vastai.nix { })
               pkgs.linuxPackages.nvidia_x11.bin # nvidia-smi, nvidia-debugdump
+              vulkan-loader
+              vulkan-tools # vulkaninfo, vkcube — how you tell a broken ICD apart
               git
               curl
               wget
@@ -75,10 +89,10 @@
               tmux
               rsync
               python3
-            ];
+            ] ++ lib.optional withCuda cudaToolkit;
 
             # Ship the full NVIDIA userspace driver and let hardware.graphics
-            # populate /run/opengl-driver (GL/GLX/EGL/Vulkan + libcuda,
+            # populate /run/opengl-driver (GL/GLX/EGL + the Vulkan ICD, libcuda,
             # libnvidia-ml). Note the userspace version has to match the host's
             # kernel module — pin pkgs.linuxPackages.nvidiaPackages.* here when
             # the host runs a different branch than nixpkgs' default.
@@ -88,12 +102,13 @@
             };
 
             environment.variables = {
-              CUDA_PATH = "${cudaToolkit}";
               LD_LIBRARY_PATH = runtimeLibraryPath;
-            };
+            } // lib.optionalAttrs withCuda { CUDA_PATH = "${cudaToolkit}"; };
             # ...and for services, not just login shells.
             virtualisation.dockerVariant.systemd.settings.Manager.DefaultEnvironment =
-              lib.mkForce "SYSTEMD_SECCOMP=0 CUDA_PATH=${cudaToolkit} LD_LIBRARY_PATH=${runtimeLibraryPath}";
+              lib.mkForce (lib.concatStringsSep " " ([ "SYSTEMD_SECCOMP=0" ]
+                ++ lib.optional withCuda "CUDA_PATH=${cudaToolkit}"
+                ++ [ "LD_LIBRARY_PATH=${runtimeLibraryPath}" ]));
             # nvidia-smi lands in /usr/bin, which NixOS' profile PATH drops.
             environment.extraInit = ''export PATH="$PATH:/usr/bin"'';
             # Build tools such as Forge provisioners download auxiliary JDKs
@@ -133,7 +148,7 @@
         ];
       });
 
-      cudaSystems = lib.mapAttrs mkSystem cudaVersions;
+      cudaSystems = lib.mapAttrs mkSystem (cudaVersions // { vulkan = null; });
     in
     {
       packages.${system} = lib.mapAttrs (_: s: s.config.system.build.dockerImage) cudaSystems

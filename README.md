@@ -11,6 +11,7 @@ One image per CUDA release nixpkgs still carries:
 | `cuda13` | alias for the newest 13.x (13.2 today) |
 | `cuda12_6` `cuda12_8` `cuda12_9` | 12.6, 12.8, 12.9 |
 | `cuda13_0` `cuda13_1` `cuda13_2` `cuda13_3` | 13.0 – 13.3 |
+| `vulkan` | none — Vulkan only |
 
 12.5 and older (and all of 11.x) were removed from nixpkgs as unmaintained
 upstream. The aliases share their closure with the minor they point at, so they
@@ -35,6 +36,31 @@ headers and libraries. Port 22 is declared on the image, so `-P` works.
 
 Root login is key-only — edit the key in `flake.nix` before building for
 someone else.
+
+## Vulkan
+
+Vulkan and CUDA are two APIs onto the same NVIDIA driver, so **every image
+here speaks both** — `hardware.graphics` puts the ICD in
+`/run/opengl-driver/share/vulkan/icd.d`, and `vulkan-loader` and
+`vulkan-tools` are installed. The separate `vulkan` tag is the same image
+without the CUDA toolkit: a few GB smaller, and it is the one that makes sense
+on AMD or Intel hosts, where CUDA is not an option.
+
+The images set `NVIDIA_DRIVER_CAPABILITIES=all` in the OCI `Env`. Without it
+the NVIDIA container runtime defaults to `compute,utility` and injects
+`libcuda` and `nvidia-smi` but none of the GL/Vulkan libraries — and the
+image's own copies cannot stand in, because that userspace has to match the
+host's kernel module exactly. The variable has to be in the image config: the
+runtime hook reads it before the container exists, so no in-container setting
+can substitute.
+
+```bash
+vulkaninfo --summary          # driverName should be "NVIDIA"
+nix run nixpkgs#ollama-vulkan -- serve
+```
+
+`ollama-vulkan` is in nixpkgs and, unlike `ollama-cuda`, is free software —
+so it substitutes from the binary cache in seconds instead of compiling.
 
 ## vastai CLI
 
