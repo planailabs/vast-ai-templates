@@ -18,6 +18,23 @@ Vast reports no Vulkan version, so the script maps the requested one to the
 NVIDIA driver branch that first shipped it in a general release — 1.2 → r440,
 1.3 → r510, 1.4 → 550.40.81 — and filters `driver_version` locally. Ask for a
 version it has no recorded mapping for and it refuses rather than guessing.
+GPUs that are not NVIDIA skip that check: their `driver_version` is not an
+NVIDIA branch number, and they are the hosts a Vulkan rental actually wants.
+
+`VAST_ACCEL` also picks the template: `cuda` rents through `plan-ai-base`
+(CUDA toolkit included), `vulkan` through `plan-ai-vulkan` (the `vulkan` image
+tag, no toolkit). `VAST_TEMPLATE` overrides both.
+
+**NVIDIA Vulkan does not work on Vast.** Measured on two unrelated hosts — a
+Tesla V100 on driver 580.159.03 and a Quadro RTX 8000 on 595.71.05 — the
+injected ICD loads and then the driver refuses:
+`vk_icdNegotiateLoaderICDInterfaceVersion` returns `-3`
+(`VK_ERROR_INITIALIZATION_FAILED`) before it even opens `/dev/nvidiactl`, and
+`vulkaninfo` falls back to Mesa's llvmpipe. CUDA on the same hosts is fine.
+So `plan-ai-vulkan` is for AMD or Intel GPUs, where Mesa's ICDs ship in the
+image and nothing has to be injected — and Vast currently lists none of those
+(75 distinct models across 2000 rentable offers, all NVIDIA). Until that
+changes, rent with `cuda>=…`.
 
 Use `scripts/order.sh list` first. It returns only offers with:
 

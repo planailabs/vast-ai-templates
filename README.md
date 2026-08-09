@@ -62,6 +62,18 @@ nix run nixpkgs#ollama-vulkan -- serve
 `ollama-vulkan` is in nixpkgs and, unlike `ollama-cuda`, is free software —
 so it substitutes from the binary cache in seconds instead of compiling.
 
+**On vast.ai, NVIDIA Vulkan does not work.** The image side is correct — the
+manifest the NVIDIA hook writes to `/etc/vulkan/icd.d` is picked up via
+`VK_ADD_DRIVER_FILES`, and `libGLX_nvidia.so.0` loads with all its
+dependencies — but the driver itself then declines:
+`vk_icdNegotiateLoaderICDInterfaceVersion` returns `-3`
+(`VK_ERROR_INITIALIZATION_FAILED`) without ever opening `/dev/nvidiactl`.
+Reproduced on a Tesla V100 (driver 580.159.03) and a Quadro RTX 8000
+(595.71.05); CUDA works on both. `vulkaninfo` then reports only Mesa's
+llvmpipe, and `ollama-vulkan` runs at `100% CPU`. Use a CUDA tag on NVIDIA
+hosts; the `vulkan` tag is for AMD/Intel GPUs, where Mesa's ICDs come from
+the image itself.
+
 ## vastai CLI
 
 The [`vastai`](https://pypi.org/project/vastai/) CLI/SDK isn't in nixpkgs, so

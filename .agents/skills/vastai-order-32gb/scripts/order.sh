@@ -43,12 +43,20 @@ need() { command -v "$1" >/dev/null || { echo "order.sh: $1 is required" >&2; ex
 need vastai
 need jq
 
+# plan-ai-base carries the CUDA toolkit; plan-ai-vulkan is the same image
+# without it, for GPUs that have no CUDA at all.
+template_name="${VAST_TEMPLATE:-$([[ $accel_api == vulkan ]] && echo plan-ai-vulkan || echo plan-ai-base)}"
+
 offers() {
     # The driver filter is a no-op for cuda (min_driver stays 0); Vast's own
-    # cuda_vers already covers that case server-side.
+    # cuda_vers already covers that case server-side.  It is also skipped for
+    # non-NVIDIA GPUs, whose driver_version is not an NVIDIA branch number —
+    # those are exactly the hosts a Vulkan rental wants, so a numeric
+    # comparison against an NVIDIA branch would throw them all away.
     vastai search offers --raw "$query" -o dph --limit "$limit" --storage "$disk" |
-        jq --argjson mindrv "$min_driver" \
-            '[.[] | select(((.driver_version // "0") | split(".")[0] | tonumber) >= $mindrv)]'
+        jq --argjson mindrv "$min_driver" '[.[] |
+            select((.gpu_name | test("Radeon|Instinct|MI[0-9]|Arc|Intel"; "i"))
+                   or (((.driver_version // "0") | split(".")[0] | tonumber) >= $mindrv))]'
 }
 
 case "${1:-list}" in
@@ -85,14 +93,14 @@ case "${1:-list}" in
         }
         user_id="$(vastai show user --raw | jq -r '.id')"
         template="$(vastai search templates --raw "creator_id=$user_id" |
-            jq -r '[.[] | select(.name == "plan-ai-base") | .hash_id] | unique | if length == 1 then .[0] else empty end')"
+            jq -r --arg name "$template_name" '[.[] | select(.name == $name) | .hash_id] | unique | if length == 1 then .[0] else empty end')"
         [[ -n $template ]] || {
-            echo "order.sh: could not resolve exactly one plan-ai-base template" >&2
+            echo "order.sh: could not resolve exactly one $template_name template" >&2
             exit 1
         }
         offer_id="$(jq -r '.[0].id' <<<"$offer")"
         gpu="$(jq -r '.[0].gpu_name' <<<"$offer")"
-        echo "Renting $gpu offer $offer_id at \$$price/h with ${disk} GiB disk via plan-ai-base as '$VAST_LABEL'" >&2
+        echo "Renting $gpu offer $offer_id at \$$price/h with ${disk} GiB disk via $template_name as '$VAST_LABEL'" >&2
         created="$(vastai create instance "$offer_id" --template_hash "$template" --disk "$disk" \
             --direct --cancel-unavail --label "$VAST_LABEL")"
         contract="$(sed -n "s/.*'new_contract': \([0-9][0-9]*\).*/\1/p" <<<"$created")"
