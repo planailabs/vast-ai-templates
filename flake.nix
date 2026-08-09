@@ -58,8 +58,13 @@
           let
             cudaToolkit = if cudaAttr == null then null else pkgs.${cudaAttr}.cudatoolkit;
             withCuda = cudaToolkit != null;
-            runtimeLibraryPath =
-              lib.concatStringsSep ":" (lib.optional withCuda "${cudaToolkit}/lib" ++ [ driverLibs ]);
+            # The host-injected libGLX_nvidia.so.0 — which is also the Vulkan
+            # ICD — links against libX11 and libXext. Nothing else in the image
+            # pulls them in, and without them the loader gets as far as reading
+            # the ICD manifest and then fails to dlopen the driver.
+            icdDeps = lib.makeLibraryPath [ pkgs.xorg.libX11 pkgs.xorg.libXext ];
+            runtimeLibraryPath = lib.concatStringsSep ":" (
+              lib.optional withCuda "${cudaToolkit}/lib" ++ [ driverLibs icdDeps ]);
           in {
             nixpkgs.config.allowUnfree = true; # cudatoolkit, nvidia_x11
 
@@ -103,12 +108,21 @@
 
             environment.variables = {
               LD_LIBRARY_PATH = runtimeLibraryPath;
+              # The NVIDIA hook drops its Vulkan ICD in the FHS location,
+              # /etc/vulkan/icd.d — which nixpkgs' loader does not search (it
+              # is patched to look in /run/opengl-driver/share/vulkan/icd.d).
+              # ADD rather than replace, so Mesa's ICDs survive: they are the
+              # only ones that work on an AMD or Intel host.
+              VK_ADD_DRIVER_FILES = "/etc/vulkan/icd.d/nvidia_icd.json";
             } // lib.optionalAttrs withCuda { CUDA_PATH = "${cudaToolkit}"; };
             # ...and for services, not just login shells.
             virtualisation.dockerVariant.systemd.settings.Manager.DefaultEnvironment =
               lib.mkForce (lib.concatStringsSep " " ([ "SYSTEMD_SECCOMP=0" ]
                 ++ lib.optional withCuda "CUDA_PATH=${cudaToolkit}"
-                ++ [ "LD_LIBRARY_PATH=${runtimeLibraryPath}" ]));
+                ++ [
+                  "LD_LIBRARY_PATH=${runtimeLibraryPath}"
+                  "VK_ADD_DRIVER_FILES=/etc/vulkan/icd.d/nvidia_icd.json"
+                ]));
             # nvidia-smi lands in /usr/bin, which NixOS' profile PATH drops.
             environment.extraInit = ''export PATH="$PATH:/usr/bin"'';
             # Build tools such as Forge provisioners download auxiliary JDKs
