@@ -5,10 +5,24 @@ description: Shortlist and rent a verified single-GPU Vast.ai machine with at le
 
 # Order a 32 GB Vast.ai machine
 
+Every invocation needs `VAST_ACCEL` — which GPU API the work needs and the
+lowest version that runs it. There is no default: a rental is only useful if
+the host can run *your* binaries.
+
+```bash
+export VAST_ACCEL="cuda>=13.0"    # filters on Vast's cuda_vers
+export VAST_ACCEL="vulkan>=1.3"   # filters on driver_version instead
+```
+
+Vast reports no Vulkan version, so the script maps the requested one to the
+NVIDIA driver branch that first shipped it in a general release — 1.2 → r440,
+1.3 → r510, 1.4 → 550.40.81 — and filters `driver_version` locally. Ask for a
+version it has no recorded mapping for and it refuses rather than guessing.
+
 Use `scripts/order.sh list` first. It returns only offers with:
 
 - one GPU and at least 32 GB advertised VRAM;
-- CUDA 13 compatibility;
+- the accelerator version from `VAST_ACCEL`;
 - a verified host with reliability at least 0.98;
 - at least two direct ports, 200 Mbps download, and the requested disk space.
 
@@ -19,6 +33,7 @@ short run; choose for the workload rather than price alone.
 Rent only after the user explicitly asks to provision or run work on Vast.ai:
 
 ```bash
+export VAST_ACCEL="cuda>=13.0"
 export VAST_MAX_DPH=0.75
 export VAST_LABEL=<project-specific-name>
 export VAST_GPU_NAME="RTX 5090" # optional exact filter

@@ -3,14 +3,52 @@ set -euo pipefail
 
 disk="${VAST_DISK_GB:-80}"
 limit="${VAST_OFFER_LIMIT:-20}"
-query="cuda_vers>=13.0 gpu_ram>=32 num_gpus=1 rentable=true disk_space>=$disk inet_down>=200 direct_port_count>=2 verified=true reliability>=0.98"
+
+# Required, no default: which GPU API the workload needs, and the lowest
+# version that will run it.  There is no sensible default — a rental is only
+# useful if the host can run *your* binaries, and Vast rents plenty of
+# machines whose driver predates whatever the image was built against.
+#   VAST_ACCEL="cuda>=13.0"   filters on Vast's own cuda_vers field
+#   VAST_ACCEL="vulkan>=1.3"  filters on driver_version; Vast reports no
+#                             Vulkan version, and the driver is what decides it
+[[ ${VAST_ACCEL:-} =~ ^(cuda|vulkan)\>=([0-9]+(\.[0-9]+)*)$ ]] || {
+    echo "order.sh: set VAST_ACCEL to cuda>=<version> or vulkan>=<version>," \
+         "e.g. VAST_ACCEL='cuda>=13.0' or VAST_ACCEL='vulkan>=1.3'" >&2
+    exit 2
+}
+accel_api="${BASH_REMATCH[1]}"
+accel_ver="${BASH_REMATCH[2]}"
+
+# NVIDIA driver branch that first shipped each Vulkan version in a general
+# release (developer.nvidia.com/vulkan-driver): 1.2 in r440, 1.4 in 550.40.81
+# (Dec 2024).  1.3 uses r510, the minimum DXVK also requires for it.
+min_driver=0
+if [[ $accel_api == vulkan ]]; then
+    case "$accel_ver" in
+        1.2) min_driver=440 ;;
+        1.3) min_driver=510 ;;
+        1.4) min_driver=550 ;;
+        *)
+            echo "order.sh: no recorded NVIDIA driver requirement for Vulkan $accel_ver;" \
+                 "known: 1.2, 1.3, 1.4" >&2
+            exit 2
+            ;;
+    esac
+fi
+
+query="gpu_ram>=32 num_gpus=1 rentable=true disk_space>=$disk inet_down>=200 direct_port_count>=2 verified=true reliability>=0.98"
+[[ $accel_api == cuda ]] && query="cuda_vers>=$accel_ver $query"
 
 need() { command -v "$1" >/dev/null || { echo "order.sh: $1 is required" >&2; exit 1; }; }
 need vastai
 need jq
 
 offers() {
-    vastai search offers --raw "$query" -o dph --limit "$limit" --storage "$disk"
+    # The driver filter is a no-op for cuda (min_driver stays 0); Vast's own
+    # cuda_vers already covers that case server-side.
+    vastai search offers --raw "$query" -o dph --limit "$limit" --storage "$disk" |
+        jq --argjson mindrv "$min_driver" \
+            '[.[] | select(((.driver_version // "0") | split(".")[0] | tonumber) >= $mindrv)]'
 }
 
 case "${1:-list}" in
