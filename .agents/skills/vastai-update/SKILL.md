@@ -58,6 +58,11 @@ What each command actually does — measured, not documented:
 re-read `.ports."22/tcp"[0].HostPort` before connecting. Anything worth keeping
 must live on a volume first.
 
+The first recycle after `update instance --image` sometimes restarts the *old*
+image anyway — `status_msg` names the tag it actually started, and a second
+recycle then pulls the new one. Check the tag rather than assuming; the giveaway
+is a recycle that reaches `running` in seconds without any `Pull complete` lines.
+
 ## Picking a machine
 
 A cheap offer is worthless if you cannot reach it. Filter on direct ports, or

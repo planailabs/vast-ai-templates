@@ -38,6 +38,17 @@ environment.etc."hosts".enable = false;
 `readlink -f /run/current-system` is the only trustworthy check that the new
 image is live. The API's `status_msg` lags and keeps naming the previous tag.
 
+Two ways a rented host kills the boot before you get anywhere, both visible in
+`vastai logs` (which shows systemd's output since the nixos2docker console
+fix) and neither fixable from the image:
+
+- `Detected unsupported legacy cgroup hierarchy, refusing execution` —
+  the host runs cgroup v1, which systemd 261 will not start on. Destroy and
+  rent elsewhere.
+- `Bind for 0.0.0.0:<port> failed: port is already allocated` with the
+  instance stuck in `created` — a stale allocation in the host's Docker.
+  Recycling does not clear it.
+
 ## Layer 2 — the GPU is reachable
 
 ```bash
@@ -54,6 +65,33 @@ Two failures to tell apart:
 - `Driver/library version mismatch` — the image's userspace driver differs from
   `/proc/driver/nvidia/version`. Pin `linuxPackages.nvidiaPackages.*` to the
   host's branch.
+
+### Vulkan
+
+```bash
+vulkaninfo --summary 2>/dev/null | sed -n '/Devices:/,$p' | grep -E 'deviceName|driverName'
+```
+
+`driverName = llvmpipe` alone means no GPU driver was found — Mesa's software
+rasterizer is the fallback and it will answer prompts happily at CPU speed.
+The image points `VK_ADD_DRIVER_FILES` at `/etc/vulkan/icd.d/nvidia_icd.json`,
+where the NVIDIA hook writes its manifest, because nixpkgs' loader only
+searches `/run/opengl-driver/share/vulkan/icd.d`.
+
+Distinguish the three failures with `VK_LOADER_DEBUG=error,warn`:
+
+| loader says | cause |
+|---|---|
+| no mention of the NVIDIA ICD at all | manifest not found — `NVIDIA_DRIVER_CAPABILITIES` didn't include `graphics`, so the hook never wrote it |
+| `Failed loading library associated with ICD JSON libGLX_nvidia.so.0` | a dependency is missing; `ldd /usr/lib/x86_64-linux-gnu/libGLX_nvidia.so.0` names it |
+| `Could not get 'vkCreateInstance' via 'vk_icdGetInstanceProcAddr'` | the driver itself refuses to initialise — a host property, nothing to fix in the image |
+
+The last one is worth proving before you blame the image, because it looks
+identical to a packaging bug. `vk_icdNegotiateLoaderICDInterfaceVersion`
+returning `-3` (`VK_ERROR_INITIALIZATION_FAILED`), from a 20-line dlopen
+program, settles it: a Tesla V100 on driver 580.159.03 answers `-3` without
+ever opening `/dev/nvidiactl`, while `nvidia-smi`, CUDA, `/dev/dri/renderD*`
+and every support library are present and correct.
 
 ## Layer 3 — real inference (the actual pass/fail)
 
@@ -106,6 +144,12 @@ smollm2:135m is ~270 MB — small enough that a failure is the GPU, not patience
 If you do want the nixpkgs route (`NIXPKGS_ALLOW_UNFREE=1 nix shell --impure
 nixpkgs#ollama-cuda`), build it once and pin it in xzar so instances substitute
 it instead of compiling.
+
+For the Vulkan image use `nix shell nixpkgs#ollama-vulkan` instead — it is
+free software, so it substitutes from cache.nixos.org in seconds (26 MiB) and
+none of the ollama-cuda compile problem applies. It sets `OLLAMA_VULKAN=1`
+itself; `ollama ps` showing `100% CPU` and a log line reading
+`inference compute id=cpu library=cpu` is what "no Vulkan device" looks like.
 
 Pass criteria:
 

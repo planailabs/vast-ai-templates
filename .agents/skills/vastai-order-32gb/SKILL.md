@@ -64,6 +64,13 @@ Capture and redact the create response. Vast CLI 1.5.2 prints an
 instance-scoped API key alongside `new_contract`; only the instance id belongs
 in logs or agent transcripts. `scripts/order.sh` emits a sanitized response.
 
+Expect to lose some hosts to problems no filter predicts, and budget a few
+minutes per attempt: a stale Docker port allocation leaves the instance stuck
+in `created` (`Bind for 0.0.0.0:<port> failed: port is already allocated`), a
+cgroup v1 host makes systemd refuse to boot at all, and a datacenter GPU may
+have no working Vulkan even on a current driver. Destroy and take the next
+offer rather than fighting it — `vastai logs <id>` says which one you hit.
+
 Record the returned instance id immediately. Poll `vastai show instance <id>
 --raw` until it is running, then re-read the mapped SSH port. Verify the actual
 GPU and VRAM with `nvidia-smi`; an API offer is not proof that the container can
