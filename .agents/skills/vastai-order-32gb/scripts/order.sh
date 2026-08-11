@@ -54,7 +54,9 @@ offers() {
     # those are exactly the hosts a Vulkan rental wants, so a numeric
     # comparison against an NVIDIA branch would throw them all away.
     vastai search offers --raw "$query" -o dph --limit "$limit" --storage "$disk" |
-        jq --argjson mindrv "$min_driver" '[.[] |
+        jq --argjson mindrv "$min_driver" --arg excluded "${VAST_EXCLUDE_MACHINE_IDS:-}" '[.[] as $offer |
+            select(($excluded | split(",") | index($offer.machine_id | tostring)) == null) |
+            $offer |
             select((.gpu_name | test("Radeon|Instinct|MI[0-9]|Arc|Intel"; "i"))
                    or (((.driver_version // "0") | split(".")[0] | tonumber) >= $mindrv))]'
 }
