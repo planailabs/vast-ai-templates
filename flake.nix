@@ -54,6 +54,8 @@
         inherit system;
         modules = [
           nixos2docker.nixosModules.default
+          ./nix/webui.nix
+          ./nix/ai-guide.nix
           ({ pkgs, lib, ... }:
           let
             cudaToolkit = if cudaAttr == null then null else pkgs.${cudaAttr}.cudatoolkit;
@@ -179,6 +181,10 @@
         # (`nix run .#vastai -- show instances`).
         vastai = pkgs.python3Packages.callPackage ./nix/vastai.nix { };
 
+        # The log web UI, standalone: `WEBUI_LOGS=/tmp/x nix run .#vastai-webui`
+        # serves it on 1111 without a container in sight.
+        vastai-webui = cudaSystems.vulkan.config.system.build.vastai-webui;
+
         # NixOS-in-Incus image for the GitLab CI runners that build the above.
         # Must be named `image` — that's the attribute the runner infra builds.
         image = gitlab-incus-image.lib.mkImage {
@@ -208,6 +214,28 @@
           ];
         };
       };
+
+      # `nix flake check`. The first two are seconds and need no KVM, so CI runs
+      # them; the VM test does need /dev/kvm and stays a local check.
+      checks.${system} =
+        let cfg = cudaSystems.vulkan.config; in
+        {
+          webui-selftest = pkgs.runCommand "webui-selftest" { } ''
+            ${self.packages.${system}.vastai-webui}/bin/vastai-webui --selftest
+            touch $out
+          '';
+
+          # Eval-only: catches a dropped module import without building an image.
+          webui-wiring =
+            assert lib.elem 1111 cfg.networking.firewall.allowedTCPPorts;
+            assert cfg.virtualisation.dockerImage.extraEnv.OPEN_BUTTON_PORT == "1111";
+            assert toString cfg.users.motdFile == "/run/motd";
+            assert cfg.environment.etc ? "ai-guide.md";
+            pkgs.runCommand "webui-wiring" { } "touch $out";
+
+          webui-vm = pkgs.testers.runNixOSTest
+            (import ./nix/webui-test.nix { inherit pkgs lib nixos2docker; });
+        };
 
       # `nix develop` — what push-image.sh and the CI cache job need.
       devShells.${system}.default = pkgs.mkShell {
