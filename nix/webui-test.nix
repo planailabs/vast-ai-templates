@@ -48,8 +48,8 @@ in
     def job(name, log, pattern):
         """A detached process that declares WEBUI_LOGS, like a real training run."""
         machine.succeed(
-            f"docker exec -d webui {path}/env WEBUI_LOGS={log} "
-            f"'WEBUI_PROGRESS_PATTERN={pattern}' {path}/sleep 600"
+            f"docker exec -d webui ${path}/env WEBUI_LOGS={log} "
+            f"'WEBUI_PROGRESS_PATTERN={pattern}' ${path}/sleep 600"
         )
 
     def write(log, text):

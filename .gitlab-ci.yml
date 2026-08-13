@@ -1,5 +1,6 @@
 stages:
   - cache
+  - check
   - build
   - deploy
 
@@ -19,6 +20,17 @@ cache-devshell:
   rules:
     - if: $XZAR_TOKEN
   timeout: 1h
+
+# The two checks that need no /dev/kvm: the web UI's parser and source-selection
+# asserts, and an eval-only check that its module is still wired into every
+# image.  checks.webui-vm boots a container in a VM and stays a local check.
+check:
+  stage: check
+  tags:
+    - nix-image
+  script:
+    - nix build -L .#checks.x86_64-linux.webui-selftest .#checks.x86_64-linux.webui-wiring
+  timeout: 30m
 
 build:
   stage: build

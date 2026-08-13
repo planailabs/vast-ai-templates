@@ -54,6 +54,12 @@ What each command actually does — measured, not documented:
 | `update instance --template_hash_id` | reported success, container unchanged |
 | `update template <hash> --image_tag` | 400 Bad Request |
 
+`vastai update template` rebuilds the whole record from the flags you pass:
+anything omitted is reset, including `--login` (which carries
+`docker_login_repo` — drop it and instances can no longer pull the private
+image). Dump the template first and pass every field back. It also rotates
+`hash_id`, which is why `order.sh` resolves templates by name.
+
 `recycle` wipes the container filesystem **and reassigns the host SSH port** —
 re-read `.ports."22/tcp"[0].HostPort` before connecting. Anything worth keeping
 must live on a volume first.
@@ -106,6 +112,12 @@ ssh -i ~/.ssh/id_ed25519 -p <port> root@<ip> '
 
 `readlink -f /run/current-system` is the reliable check that the new image is
 live — `status_msg` lags and keeps showing the previous tag.
+
+`WEBUI_LOGS` and `WEBUI_PROGRESS_PATTERN` do **not** need any of this: the web
+UI scans `/proc`, so exporting them on the job you start is enough.
+`vastai update instance <id> --env '…'` + `recycle` is only for changing the
+container-wide default, and it wipes the container filesystem like any other
+recycle.
 
 Failure modes worth recognising:
 

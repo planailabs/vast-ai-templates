@@ -100,11 +100,33 @@ case "${1:-list}" in
             echo "order.sh: could not resolve exactly one $template_name template" >&2
             exit 1
         }
+        # --env replaces the template's whole docker-options string, so the
+        # ports have to be repeated here or the instance comes up unreachable.
+        env_opts="-p 22:22 -p 1111:1111 -e OPEN_BUTTON_PORT=1111"
+        # Optional: point the log web UI at a file from the first boot.  Any
+        # process on the box can do the same later by exporting WEBUI_LOGS, so
+        # this is a convenience, not a requirement.
+        if [[ -n ${VAST_WEBUI_LOGS:-} ]]; then
+            for value in "$VAST_WEBUI_LOGS" "${VAST_WEBUI_PROGRESS_PATTERN:-}"; do
+                # Vast re-parses this string; single quotes carry a regex
+                # through it, and a literal ' is the one thing they cannot.
+                [[ $value != *"'"* ]] || {
+                    echo "order.sh: VAST_WEBUI_* may not contain a single quote" >&2
+                    exit 2
+                }
+            done
+            env_opts+=" -e WEBUI_LOGS='$VAST_WEBUI_LOGS'"
+            [[ -z ${VAST_WEBUI_PROGRESS_PATTERN:-} ]] ||
+                env_opts+=" -e WEBUI_PROGRESS_PATTERN='$VAST_WEBUI_PROGRESS_PATTERN'"
+        elif [[ -n ${VAST_WEBUI_PROGRESS_PATTERN:-} ]]; then
+            echo "order.sh: VAST_WEBUI_PROGRESS_PATTERN needs VAST_WEBUI_LOGS" >&2
+            exit 2
+        fi
         offer_id="$(jq -r '.[0].id' <<<"$offer")"
         gpu="$(jq -r '.[0].gpu_name' <<<"$offer")"
         echo "Renting $gpu offer $offer_id at \$$price/h with ${disk} GiB disk via $template_name as '$VAST_LABEL'" >&2
         created="$(vastai create instance "$offer_id" --template_hash "$template" --disk "$disk" \
-            --direct --cancel-unavail --label "$VAST_LABEL")"
+            --direct --cancel-unavail --label "$VAST_LABEL" --env "$env_opts")"
         contract="$(sed -n "s/.*'new_contract': \([0-9][0-9]*\).*/\1/p" <<<"$created")"
         [[ -n $contract ]] || {
             echo "order.sh: create returned no instance id" >&2

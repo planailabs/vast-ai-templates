@@ -74,6 +74,43 @@ llvmpipe, and `ollama-vulkan` runs at `100% CPU`. Use a CUDA tag on NVIDIA
 hosts; the `vulkan` tag is for AMD/Intel GPUs, where Mesa's ICDs come from
 the image itself.
 
+## Log web UI
+
+Every image serves a log viewer on TCP 1111 — the port vast's **Open** button
+opens, declared on the image so vast maps it, along with `OPEN_BUTTON_PORT`.
+
+It follows whatever the machine is actually doing: a `/proc` scan every few
+seconds picks up every process that exports `WEBUI_LOGS`, so a job started long
+after boot needs no restart and no recycle.
+
+```bash
+WEBUI_LOGS=/root/job.log WEBUI_PROGRESS_PATTERN='step (?P<current>\d+)/(?P<total>\d+)' \
+  setsid nohup ./train.sh > /root/job.log 2>&1 < /dev/null &
+```
+
+`WEBUI_LOGS` is a file path (`tail -F`, so rotation and truncation are handled)
+or a systemd unit name (`journalctl -fu`). Each distinct log becomes its own
+tab; two processes naming the same file share one view. `WEBUI_PROGRESS_PATTERN`
+is a Python regex whose newest match drives the bar — a named `percent` group,
+named `current`/`total`, or the first two numbered groups.
+
+The port lands on a public IP, so `/api/tail` and `/raw` need a token
+(`/run/vastai-webui/token`, or set `WEBUI_TOKEN`); the page itself carries no
+log content, so the Open button still works and then asks for the token.
+
+```bash
+curl -s "localhost:1111/raw?token=$(cat /run/vastai-webui/token)" | tail
+WEBUI_LOGS=/tmp/x nix run .#vastai-webui        # same thing, on your laptop
+```
+
+## AI guide
+
+`/etc/ai-guide.md` tells an agent that just SSH'd in what this box is: NixOS
+(no apt), ephemeral, billed hourly, whose teardown it owes, how to run vendor
+binaries and long jobs, and how to drive the web UI. The MOTD is three lines —
+the live URL, its token, and a pointer at the guide — regenerated at every boot
+from `/proc/1/environ`.
+
 ## vastai CLI
 
 The [`vastai`](https://pypi.org/project/vastai/) CLI/SDK isn't in nixpkgs, so
@@ -98,6 +135,12 @@ The runner image itself comes from this flake — `nix build .#image` builds a
 NixOS-in-Incus image with `xzar.plan.ai` configured as a substituter. The
 `cache-devshell` job pins the devshell closure in xzar (needs `XZAR_TOKEN`), so
 later pipelines fetch skopeo & co instead of rebuilding them.
+
+`nix flake check` covers the web UI: `webui-selftest` runs the progress-regex,
+source-selection and sanitizer asserts, `webui-wiring` is an eval-only check
+that the modules are still imported and the port still declared — both need no
+KVM, and CI runs them. `webui-vm` boots a slim image under Docker in a VM and
+drives the whole thing end to end; it needs `/dev/kvm`, so it stays local.
 
 The build job pins `.#<variant>-toplevel` — the system closure, not the packed
 tarball. The image is repacked from that closure at deploy time, so the cache

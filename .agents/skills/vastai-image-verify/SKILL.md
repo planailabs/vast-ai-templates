@@ -93,7 +93,25 @@ program, settles it: a Tesla V100 on driver 580.159.03 answers `-3` without
 ever opening `/dev/nvidiactl`, while `nvidia-smi`, CUDA, `/dev/dri/renderD*`
 and every support library are present and correct.
 
-## Layer 3 — real inference (the actual pass/fail)
+## Layer 3 — the log web UI
+
+```bash
+curl -sf localhost:1111/healthz                       # "ok"
+systemctl is-active vastai-webui                      # active even with no job
+TOKEN=$(cat /run/vastai-webui/token)
+WEBUI_LOGS=/tmp/probe.log WEBUI_PROGRESS_PATTERN='step ([0-9]+)/([0-9]+)' \
+  setsid sleep 60 &
+echo "step 5/10" >> /tmp/probe.log; sleep 5
+curl -sf "localhost:1111/api/tail?token=$TOKEN" | grep '"percent": 50'
+head -3 /run/motd                                     # 3 lines, URL + guide pointer
+```
+
+The unit is active even when nothing declares `WEBUI_LOGS` — idle is a normal
+state here, so a *failed* `vastai-webui` is a real bug. `"percent": 50` not
+appearing within a scan interval (3 s) means the /proc scan cannot read the
+job's environment, which on this image should never happen (it runs as root).
+
+## Layer 4 — real inference (the actual pass/fail)
 
 Everything above can look fine while CUDA still can't allocate. This is the test
 that matters: run a real model on the GPU.
@@ -170,7 +188,7 @@ and `nix.settings.sandbox = false` (no CAP_SYS_ADMIN in the container).
 ## When a check fails: the loop
 
 Fix in `flake.nix` → build → push a fresh `-$SHA` tag → `vastai recycle
-instance` → re-verify. Repeat until layer 3 passes.
+instance` → re-verify. Repeat until layer 4 passes.
 
 ```bash
 # after editing flake.nix

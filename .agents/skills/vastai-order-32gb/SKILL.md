@@ -67,11 +67,42 @@ project the machine is being rented for (3–64 chars of `[A-Za-z0-9_.-]`), so
 each rental in `vastai show instances` says which work owns it — and which
 agent has to tear it down. A shared fallback label would make every instance
 look alike, which is exactly when an idle box gets left running.
+`create` passes its own `--env`, which *replaces* the template's docker-options
+string — hence `-p 22:22` being repeated there alongside the web UI's port.
 It deliberately preserves the template's `args` runtime: passing Vast's `--ssh`
 flag replaces PID 1 with Vast's SSH wrapper, which makes this NixOS systemd
 image restart forever immediately after `starting systemd`. Port 22 is already
 declared by the template. Override `VAST_DISK_GB` only when the workload needs
 more or less than the 80 GiB default.
+
+## Watching the run from a browser
+
+Every image serves a log viewer on port 1111 — the port vast's **Open** button
+opens. It follows whatever any process in the container declares:
+
+```bash
+export VAST_WEBUI_LOGS=/root/job.log
+export VAST_WEBUI_PROGRESS_PATTERN='step (?P<current>[0-9]+)/(?P<total>[0-9]+)'
+```
+
+Both are optional at rental time — a process started later can export the same
+two variables and the UI picks it up within seconds, no recycle. Setting them
+here just means the page is useful from the first boot. Neither value may
+contain a single quote: `--env` is a docker-options string that vast re-parses,
+and `order.sh` refuses rather than let it truncate silently.
+
+Both templates declare `-p 1111:1111 -e OPEN_BUTTON_PORT=1111`, so renting from
+the vast console works the same way.
+
+After `create`, the URL and its token:
+
+```bash
+vastai show instance <id> --raw | jq -r '"http://\(.public_ipaddr):\(.ports."1111/tcp"[0].HostPort)/"'
+ssh -p <port> root@<ip> cat /run/vastai-webui/token
+```
+
+The token is also printed in the login MOTD. **That port is on a public IP** —
+the log must not contain credentials.
 
 Vast regenerates offer and machine ids between searches. `create` therefore
 selects and consumes a current offer in one invocation instead of accepting an
