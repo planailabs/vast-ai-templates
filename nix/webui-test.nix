@@ -35,7 +35,9 @@ in
   name = "webui";
   meta.maintainers = [ ];
 
-  nodes.machine = { ... }: {
+  nodes.machine = { pkgs, ... }: {
+    # python3 for the assertions below; the image under test ships none.
+    environment.systemPackages = [ pkgs.python3 ];
     virtualisation = {
       docker.enable = true;
       memorySize = 2048;
@@ -105,7 +107,7 @@ in
     with subtest("two processes on one file are one source"):
         job("a2", "/tmp/a.log", "step ([0-9]+)/([0-9]+)")
         machine.wait_until_succeeds(
-            "${api}' | ${path}/python3 -c \"import json,sys; d=json.load(sys.stdin);"
+            "${api}' | python3 -c \"import json,sys; d=json.load(sys.stdin);"
             " sys.exit(0 if len(d['sources']) == 1 and len(d['sources'][0]['procs']) == 2 else 1)\"",
             timeout=30,
         )
@@ -114,7 +116,7 @@ in
         job("b", "/tmp/b.log", "(?P<percent>[0-9]+)%")
         write("/tmp/b.log", "building 55% done\n")
         machine.wait_until_succeeds(
-            "${api}' | ${path}/python3 -c \"import json,sys; d=json.load(sys.stdin);"
+            "${api}' | python3 -c \"import json,sys; d=json.load(sys.stdin);"
             " sys.exit(0 if len(d['sources']) == 2 and d['default'] == '/tmp/b.log'"
             " and d['tail']['key'] == '/tmp/b.log' else 1)\"",
             timeout=30,
@@ -143,7 +145,7 @@ in
     with subtest("a finished run keeps its output and its last percent"):
         machine.succeed("${exec} pkill -f 'WEBUI_LOGS=/tmp/b.log' || true")
         machine.wait_until_succeeds(
-            "${api}' | ${path}/python3 -c \"import json,sys; d=json.load(sys.stdin);"
+            "${api}' | python3 -c \"import json,sys; d=json.load(sys.stdin);"
             " s=[x for x in d['sources'] if x['key']=='/tmp/b.log'][0];"
             " sys.exit(0 if s['state']=='orphaned' and s['progress']['percent']==55.0 else 1)\"",
             timeout=30,
