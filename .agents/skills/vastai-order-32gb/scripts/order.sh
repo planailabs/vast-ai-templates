@@ -108,16 +108,19 @@ case "${1:-list}" in
         # this is a convenience, not a requirement.
         if [[ -n ${VAST_WEBUI_LOGS:-} ]]; then
             for value in "$VAST_WEBUI_LOGS" "${VAST_WEBUI_PROGRESS_PATTERN:-}"; do
-                # Vast re-parses this string; single quotes carry a regex
-                # through it, and a literal ' is the one thing they cannot.
-                [[ $value != *"'"* ]] || {
-                    echo "order.sh: VAST_WEBUI_* may not contain a single quote" >&2
+                # Measured on a live rental: a value containing whitespace is
+                # stored in the instance's extra_env and then never reaches
+                # the container, quoted or not.  Refuse it here rather than
+                # hand over a web UI whose progress bar silently never moves.
+                [[ $value != *[[:space:]\'\"]* ]] || {
+                    echo "order.sh: VAST_WEBUI_* may not contain whitespace or quotes;" \
+                         "write \\s instead of a space" >&2
                     exit 2
                 }
             done
-            env_opts+=" -e WEBUI_LOGS='$VAST_WEBUI_LOGS'"
+            env_opts+=" -e WEBUI_LOGS=$VAST_WEBUI_LOGS"
             [[ -z ${VAST_WEBUI_PROGRESS_PATTERN:-} ]] ||
-                env_opts+=" -e WEBUI_PROGRESS_PATTERN='$VAST_WEBUI_PROGRESS_PATTERN'"
+                env_opts+=" -e WEBUI_PROGRESS_PATTERN=$VAST_WEBUI_PROGRESS_PATTERN"
         elif [[ -n ${VAST_WEBUI_PROGRESS_PATTERN:-} ]]; then
             echo "order.sh: VAST_WEBUI_PROGRESS_PATTERN needs VAST_WEBUI_LOGS" >&2
             exit 2

@@ -82,14 +82,18 @@ opens. It follows whatever any process in the container declares:
 
 ```bash
 export VAST_WEBUI_LOGS=/root/job.log
-export VAST_WEBUI_PROGRESS_PATTERN='step (?P<current>[0-9]+)/(?P<total>[0-9]+)'
+export VAST_WEBUI_PROGRESS_PATTERN='step\s(?P<current>[0-9]+)/(?P<total>[0-9]+)'
 ```
 
 Both are optional at rental time — a process started later can export the same
 two variables and the UI picks it up within seconds, no recycle. Setting them
-here just means the page is useful from the first boot. Neither value may
-contain a single quote: `--env` is a docker-options string that vast re-parses,
-and `order.sh` refuses rather than let it truncate silently.
+here just means the page is useful from the first boot.
+
+**No whitespace in either value.** Measured on a live rental: vast stores a
+value containing a space in the instance's `extra_env` and then never passes it
+to the container — quoting does not help, and nothing reports the loss. Write
+`\s` in the regex; `order.sh` refuses whitespace and quotes rather than hand
+you a bar that silently never moves.
 
 Both templates declare `-p 1111:1111 -e OPEN_BUTTON_PORT=1111`, so renting from
 the vast console works the same way.

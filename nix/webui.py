@@ -194,12 +194,31 @@ class Tail(object):
         self.first = None
         self.rx = None
         self.rx_error = None
-        if pattern:
-            try:
-                self.rx = re.compile(pattern)
-            except re.error as err:
-                # A bad regex costs you the bar, not the log.
-                self.rx_error = "WEBUI_PROGRESS_PATTERN is not a valid regex: %s" % err
+        self.pattern = None
+        self.set_pattern(pattern)
+
+    def set_pattern(self, pattern):
+        """The pattern can arrive after the log does: the container-wide
+        WEBUI_LOGS starts the tail at boot, and the job that knows what its
+        own progress looks like only shows up later.  Re-matching the buffer
+        means the bar is right immediately, not from the next line on.
+        """
+        if pattern == self.pattern:
+            return
+        with self.lock:
+            self.pattern = pattern
+            self.rx = None
+            self.rx_error = None
+            self.progress = None
+            self.first = None
+            if pattern:
+                try:
+                    self.rx = re.compile(pattern)
+                except re.error as err:
+                    # A bad regex costs you the bar, not the log.
+                    self.rx_error = "WEBUI_PROGRESS_PATTERN is not a valid regex: %s" % err
+            for _, line in list(self.buf):
+                self._match(line)
 
     # -- writing -------------------------------------------------------
 
@@ -326,6 +345,7 @@ class Registry(object):
                     started.append(tail)
                 tail.procs = [(c.pid, c.cmd) for c in group]
                 tail.state = "following"
+                tail.set_pattern(pattern_for(group[0], cands))
             for key, tail in self.tails.items():
                 if key not in groups:
                     tail.procs = []
@@ -597,6 +617,21 @@ def selftest():
     assert dropped.stopped and "/a.log" not in reg.tails, "an evicted tail is stopped"
     reg.refresh([])
     assert reg.tails["/c.log"].state == "orphaned"
+
+    late = Tail("/y", "/nonexistent-on-purpose", None, 5)
+    late.consume("step 4/10\n")
+    assert late.progress is None, "no pattern, no bar"
+    late.set_pattern(r"step (\d+)/(\d+)")
+    assert late.progress["percent"] == 40.0, "a late pattern re-reads the buffer"
+    late.set_pattern("(")
+    assert late.rx_error and late.progress is None, "a bad regex is reported, not raised"
+
+    reg2 = Registry(5)
+    boot = Cand(1, 10, "/b.log", None, "init")
+    reg2.refresh([boot])
+    assert reg2.tails["/b.log"].pattern is None
+    reg2.refresh([boot, Cand(80, 50, "/b.log", r"x=(\d+)", "train")])
+    assert reg2.tails["/b.log"].pattern == r"x=(\d+)", "a job re-points the running tail"
 
     tail = Tail("/x", "/nonexistent-on-purpose", r"step (\d+)/(\d+)", 3)
     tail.consume("step 1/10\nstep 2/10\r\n")
