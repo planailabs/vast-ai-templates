@@ -45,6 +45,8 @@ in
   };
 
   testScript = ''
+    import shlex
+
     def job(name, log, pattern):
         """A detached process that declares WEBUI_LOGS, like a real training run."""
         machine.succeed(
@@ -53,7 +55,10 @@ in
         )
 
     def write(log, text):
-        machine.succeed(f"${exec} sh -c 'printf %s {text!r} >> {log}'")
+        """Append to a log inside the container. %b so the escapes below are
+        real bytes, and shlex so nothing here reaches sh half-quoted."""
+        inner = f"printf %b {shlex.quote(text)} >> {log}"
+        machine.succeed("${exec} sh -c " + shlex.quote(inner))
 
     machine.wait_for_unit("docker.service")
     machine.succeed("docker load < ${image}")
@@ -94,8 +99,8 @@ in
     with subtest("a job started long after boot is picked up"):
         job("a", "/tmp/a.log", "step ([0-9]+)/([0-9]+)")
         write("/tmp/a.log", "step 5/10\n")
+        machine.wait_until_succeeds("${api}' | grep -q '/tmp/a.log'", timeout=30)
         machine.wait_until_succeeds("${api}' | grep -q '\"percent\": 50.0'", timeout=30)
-        machine.succeed("${api}' | grep -q '/tmp/a.log'")
 
     with subtest("two processes on one file are one source"):
         job("a2", "/tmp/a.log", "step ([0-9]+)/([0-9]+)")

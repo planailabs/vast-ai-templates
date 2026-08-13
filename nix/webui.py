@@ -184,6 +184,8 @@ class Tail(object):
         self.pattern = pattern
         self.procs = []
         self.state = "following"
+        self.stopped = False
+        self.proc = None
         self.lock = threading.Lock()
         self.buf = collections.deque(maxlen=lines)
         self.seq = 0
@@ -232,10 +234,17 @@ class Tail(object):
             with self.lock:
                 self._match(sanitize(self.partial))
 
+    def stop(self):
+        """Evicted: drop the `tail -F` too, or a caller looping over unique
+        paths leaves one running per log forever."""
+        self.stopped = True
+        if self.proc is not None:
+            self.proc.kill()
+
     def follow(self):
         argv = log_command(self.path)
         self.add("-- following %s --" % self.path)
-        while True:
+        while not self.stopped:
             try:
                 proc = subprocess.Popen(argv, stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT, bufsize=0)
@@ -243,10 +252,14 @@ class Tail(object):
                 self.add("[webui] cannot run %s: %s" % (argv[0], err))
                 time.sleep(5)
                 continue
+            self.proc = proc
             for chunk in iter(lambda: proc.stdout.read(4096), b""):
                 self.consume(chunk.decode("utf-8", "replace"))
             proc.stdout.close()
-            self.add("[webui] %s exited (rc=%s), retrying" % (argv[0], proc.wait()))
+            rc = proc.wait()
+            if self.stopped:
+                return
+            self.add("[webui] %s exited (rc=%s), retrying" % (argv[0], rc))
             time.sleep(2)
 
     # -- reading -------------------------------------------------------
@@ -333,7 +346,7 @@ class Registry(object):
                 victim = next((k for k in self.tails if k != self.default), None)
             if victim is None:
                 return
-            del self.tails[victim]
+            self.tails.pop(victim).stop()
 
     def view(self, key=None):
         with self.lock:
@@ -576,6 +589,9 @@ def selftest():
     assert reg.default == "/b.log"
     reg.refresh([one, job, same, newer])
     assert reg.default == "/c.log" and len(reg.tails) == 2, "evicted down to the limit"
+    dropped = reg.tails["/a.log"]
+    reg.refresh([one, job, same, newer])
+    assert dropped.stopped and "/a.log" not in reg.tails, "an evicted tail is stopped"
     reg.refresh([])
     assert reg.tails["/c.log"].state == "orphaned"
 

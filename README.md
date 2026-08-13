@@ -90,7 +90,7 @@ WEBUI_LOGS=/root/job.log WEBUI_PROGRESS_PATTERN='step (?P<current>\d+)/(?P<total
 
 `WEBUI_LOGS` is a file path (`tail -F`, so rotation and truncation are handled)
 or a systemd unit name (`journalctl -fu`). Each distinct log becomes its own
-tab; two processes naming the same file share one view. `WEBUI_PROGRESS_PATTERN`
+entry in the picker; two processes naming the same file share one view. `WEBUI_PROGRESS_PATTERN`
 is a Python regex whose newest match drives the bar — a named `percent` group,
 named `current`/`total`, or the first two numbered groups.
 

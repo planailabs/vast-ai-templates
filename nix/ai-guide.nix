@@ -57,8 +57,8 @@ let
         step (?P<current>\d+)/(?P<total>\d+)
         step (\d+)/(\d+)               -- unnamed: first group / second group
 
-    Several logs at once are fine: each distinct path gets its own tab in the
-    UI, and two processes naming the same file share one view. From the shell:
+    Several logs at once are fine: each distinct path gets its own entry in the
+    UI's picker, and two processes naming the same file share one view. From the shell:
 
         curl -s "localhost:1111/raw?token=$(cat /run/vastai-webui/token)" | tail
 

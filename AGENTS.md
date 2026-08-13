@@ -19,5 +19,8 @@ NixOS CUDA Docker images for vast.ai. See `README.md` for what the flake builds.
 
 - `nix build` on this host: always use `-o <link>`; the disk runs near-full and
   auto-GC eats unrooted results.
+- `nix flake check` runs the log web UI's selftest and an eval-only wiring
+  check; `checks.webui-vm` boots the image under Docker in a VM and needs
+  `/dev/kvm`.
 - The registry is `registry.plan.ai`; credentials come from the `glab` token for
   `git.plan.ai` (`write_registry` scope).
