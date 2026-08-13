@@ -96,7 +96,9 @@ named `current`/`total`, or the first two numbered groups.
 
 The port lands on a public IP, so `/api/tail` and `/raw` need a token
 (`/run/vastai-webui/token`, or set `WEBUI_TOKEN`); the page itself carries no
-log content, so the Open button still works and then asks for the token.
+log content. Vast's **Open** button lands on `/?token=$OPEN_BUTTON_TOKEN`, a
+per-instance secret vast puts in the container environment for exactly this
+purpose, so that token is accepted too and the button just works.
 
 ```bash
 curl -s "localhost:1111/raw?token=$(cat /run/vastai-webui/token)" | tail

@@ -477,7 +477,7 @@ poll();
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     registry = None
-    token = ""
+    tokens = ()
 
     def log_message(self, fmt, *args):
         """A 1 Hz poll would otherwise push ~86k lines a day into journald,
@@ -502,7 +502,7 @@ class Handler(BaseHTTPRequestHandler):
             match = re.search(r"(?:^|; )webui_token=([^;]*)", self.headers.get("Cookie", ""))
             if match:
                 given = match.group(1)
-        return hmac.compare_digest(given, self.token)
+        return any(hmac.compare_digest(given, valid) for valid in self.tokens)
 
     def do_GET(self):
         url = urlparse(self.path)
@@ -554,6 +554,20 @@ def load_token(cfg):
     except OSError as err:
         print("webui: cannot persist a token in %s (%s)" % (TOKEN_FILE, err))
     return token
+
+
+def valid_tokens(cfg):
+    """Ours, plus vast's own.
+
+    Clicking "Open" in the vast console lands on `/?token=$OPEN_BUTTON_TOKEN`
+    -- a per-instance secret vast puts in the container's environment for
+    exactly this purpose.  Rejecting it would mean the button we point at this
+    port answers 401.
+    """
+    tokens = [load_token(cfg)]
+    if cfg.get("OPEN_BUTTON_TOKEN"):
+        tokens.append(cfg["OPEN_BUTTON_TOKEN"])
+    return tuple(tokens)
 
 
 def container_env():
@@ -609,6 +623,10 @@ def selftest():
         assert bare.count("'") % 2 == 0 and bare.count('"') % 2 == 0, \
             "unterminated string literal in the page: %r" % line
 
+    globals()["TOKEN_FILE"] = "/dev/null"  # the selftest persists nothing
+    seen = valid_tokens({"WEBUI_TOKEN": "ours", "OPEN_BUTTON_TOKEN": "vasts"})
+    assert seen[0] == "ours" and "vasts" in seen, "vast's Open button carries its own token"
+
     assert sanitize("\x1b[32mstep 7/10\x1b[0m") == "step 7/10"
     assert sanitize("a\x00b\x07") == "ab"
     assert parse_environ(b"WEBUI_LOGS='/a b'\0X=1")["WEBUI_LOGS"] == "/a b"
@@ -658,12 +676,12 @@ def main():
     cfg = container_env()
     registry = Registry(int(cfg.get("WEBUI_LINES", "2000")))
     Handler.registry = registry
-    Handler.token = load_token(cfg)
+    Handler.tokens = valid_tokens(cfg)
     threading.Thread(target=registry.supervise, daemon=True).start()
     port = int(cfg.get("WEBUI_PORT", "1111"))
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     server.daemon_threads = True
-    print("webui: http://0.0.0.0:%d/?token=%s" % (port, Handler.token), flush=True)
+    print("webui: http://0.0.0.0:%d/?token=%s" % (port, Handler.tokens[0]), flush=True)
     server.serve_forever()
 
 

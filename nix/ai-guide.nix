@@ -62,6 +62,9 @@ let
 
         curl -s "localhost:1111/raw?token=$(cat /run/vastai-webui/token)" | tail
 
+    The console's Open button works too: it passes vast's own
+    OPEN_BUTTON_TOKEN, which the UI accepts alongside the token above.
+
     The port is published on a public IP, so the log must not contain secrets.
 
     ## Reading the container's own environment
