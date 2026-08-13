@@ -143,7 +143,14 @@ in
                         " | grep -q 'step 10/10'")
 
     with subtest("a finished run keeps its output and its last percent"):
-        machine.succeed("${exec} pkill -f 'WEBUI_LOGS=/tmp/b.log' || true")
+        # `env VAR=x sleep` execs sleep, so the assignment is not in the
+        # command line to match on -- kill the pid the UI itself reports.
+        pid = machine.succeed(
+            "${api}' | python3 -c \"import json,sys;"
+            " print([x for x in json.load(sys.stdin)['sources']"
+            " if x['key']=='/tmp/b.log'][0]['procs'][0]['pid'])\""
+        ).strip()
+        machine.succeed(f"${exec} kill {pid}")
         machine.wait_until_succeeds(
             "${api}' | python3 -c \"import json,sys; d=json.load(sys.stdin);"
             " s=[x for x in d['sources'] if x['key']=='/tmp/b.log'][0];"
@@ -153,7 +160,8 @@ in
 
     with subtest("the guide is a file and the motd only points at it"):
         machine.succeed("${exec} grep -q WEBUI_LOGS /etc/ai-guide.md")
-        machine.succeed("${exec} test $(wc -l < /run/motd) -le 5")
+        # sh -c, or the host shell expands $(wc) against its own /run.
+        machine.succeed("${exec} sh -c 'test $(wc -l < /run/motd) -le 5'")
         machine.succeed("${exec} grep -q '/etc/ai-guide.md' /run/motd")
         machine.succeed("${exec} grep -q 'token=testtoken' /run/motd")
         machine.fail("${exec} grep -q 'apt, dnf or yum' /run/motd")

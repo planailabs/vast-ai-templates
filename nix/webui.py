@@ -512,17 +512,20 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def load_token(cfg):
+    """WEBUI_TOKEN if the operator set one, else a stable generated one.
+
+    Whichever it is, it lands in TOKEN_FILE: the login banner and every
+    `curl` example read the token from there, so the file has to hold the
+    token actually in force, not only the ones this process invented.
+    """
     token = cfg.get("WEBUI_TOKEN")
-    if token:
-        return token
-    try:
-        with open(TOKEN_FILE) as handle:
-            token = handle.read().strip()
-        if token:
-            return token
-    except OSError:
-        pass
-    token = secrets.token_urlsafe(16)
+    if not token:
+        try:
+            with open(TOKEN_FILE) as handle:
+                token = handle.read().strip()
+        except OSError:
+            token = ""
+    token = token or secrets.token_urlsafe(16)
     try:
         os.makedirs(os.path.dirname(TOKEN_FILE), exist_ok=True)
         fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
