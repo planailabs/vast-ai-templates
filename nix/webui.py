@@ -442,7 +442,7 @@ function render(d){
  var cur=d.sources.filter(function(s){return s.key===t.key})[0]||{};
  var log=$('log'),pinned=log.scrollTop+log.clientHeight>=log.scrollHeight-4;
  if(t.reset)log.textContent='';
- if(t.lines.length)log.appendChild(document.createTextNode(t.lines.join('\n')+'\n'));
+ if(t.lines.length)log.appendChild(document.createTextNode(t.lines.join('\\n')+'\\n'));
  if($('follow').checked&&(pinned||t.reset))log.scrollTop=log.scrollHeight;
  since=t.next;
  $('meta').textContent=(cur.procs&&cur.procs.length?
@@ -601,7 +601,15 @@ def selftest():
     assert pattern_for(job, [one, job]) == "x"
     assert pattern_for(job, [job]) is None
 
-    assert sanitize("\x1b" + "[32mstep 7/10" + "\x1b" + "[0m") == "step 7/10"
+    # The page is the one part no test executes: a newline inside a JS string
+    # literal is a syntax error the browser reports and nothing else does.
+    script = PAGE.split("<script>")[1].split("</script>")[0]
+    for line in script.split("\n"):
+        bare = re.sub(r"\\.", "", line)
+        assert bare.count("'") % 2 == 0 and bare.count('"') % 2 == 0, \
+            "unterminated string literal in the page: %r" % line
+
+    assert sanitize("\x1b[32mstep 7/10\x1b[0m") == "step 7/10"
     assert sanitize("a\x00b\x07") == "ab"
     assert parse_environ(b"WEBUI_LOGS='/a b'\0X=1")["WEBUI_LOGS"] == "/a b"
 
@@ -636,7 +644,7 @@ def selftest():
     tail = Tail("/x", "/nonexistent-on-purpose", r"step (\d+)/(\d+)", 3)
     tail.consume("step 1/10\nstep 2/10\r\n")
     assert tail.progress["percent"] == 20.0
-    tail.consume("\x1b" + "[32mstep 7/10" + "\x1b" + "[0m\r")
+    tail.consume("\x1b[32mstep 7/10\x1b[0m\r")
     assert tail.progress["percent"] == 70.0, "the line in flight counts"
     assert len(tail.buf) == 3, "ring buffer is bounded"
     assert "\x1b" not in tail.raw()
