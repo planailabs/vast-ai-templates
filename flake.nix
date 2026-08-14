@@ -20,6 +20,8 @@
         inherit system;
         overlays = [ xzar.overlays.default ]; # xzar-client, for the CI cache job
       };
+      truss = pkgs.callPackage ./nix/truss.nix { };
+      huggingface-cli = pkgs.python3Packages.huggingface-hub;
 
       # NVIDIA's container runtime injects the host driver (libcuda.so,
       # libnvidia-ml.so, nvidia-smi) into these paths at `docker run --gpus`
@@ -96,6 +98,8 @@
               tmux
               rsync
               python3
+              truss
+              huggingface-cli
             ] ++ lib.optional withCuda cudaToolkit;
 
             # Ship the full NVIDIA userspace driver and let hardware.graphics
@@ -180,6 +184,8 @@
         # The vast.ai CLI — shipped in every image, also usable standalone
         # (`nix run .#vastai -- show instances`).
         vastai = pkgs.python3Packages.callPackage ./nix/vastai.nix { };
+
+        inherit truss huggingface-cli;
 
         # The log web UI, standalone: `WEBUI_LOGS=/tmp/x nix run .#vastai-webui`
         # serves it on 1111 without a container in sight.
